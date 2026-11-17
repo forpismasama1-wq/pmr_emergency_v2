@@ -1,5 +1,5 @@
 
-import 'dart:math' as math;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -11,6 +11,8 @@ const red = Color(0xFFB52235);
 const brown = Color(0xFF603A2C);
 const cream = Color(0xFFFFF7EB);
 
+final supabase = Supabase.instance.client;
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Supabase.initialize(
@@ -19,8 +21,6 @@ Future<void> main() async {
   );
   runApp(const PmrEmergencyApp());
 }
-
-final supabase = Supabase.instance.client;
 
 class PmrEmergencyApp extends StatelessWidget {
   const PmrEmergencyApp({super.key});
@@ -45,7 +45,7 @@ class PmrEmergencyApp extends StatelessWidget {
   }
 }
 
-// BATIK BACKGROUND
+// BACKGROUND BATIK
 
 class BatikBackground extends StatelessWidget {
   const BatikBackground({super.key});
@@ -53,9 +53,7 @@ class BatikBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned.fill(
-      child: CustomPaint(
-        painter: BatikPainter(),
-      ),
+      child: CustomPaint(painter: BatikPainter()),
     );
   }
 }
@@ -76,7 +74,6 @@ class BatikPainter extends CustomPainter {
     for (int i = 0; i < 45; i++) {
       final x = (i % 6) * 85.0 - 25;
       final y = (i ~/ 6) * 105.0 - 20;
-
       paint.color = colors[i % colors.length];
 
       final path = Path()
@@ -138,7 +135,7 @@ class BrandLogo extends StatelessWidget {
   }
 }
 
-// LOGIN
+// LOGIN DAN PENDAFTARAN
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -148,6 +145,8 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final nameController = TextEditingController();
+  final classController = TextEditingController();
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -156,8 +155,19 @@ class _LoginPageState extends State<LoginPage> {
   bool hidePassword = true;
 
   Future<void> submit() async {
+    final name = nameController.text.trim();
+    final className = classController.text.trim();
     final email = emailController.text.trim();
     final password = passwordController.text;
+
+    if (isRegister && (name.isEmpty || className.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Nama lengkap dan kelas wajib diisi.'),
+        ),
+      );
+      return;
+    }
 
     if (email.isEmpty || password.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -175,13 +185,19 @@ class _LoginPageState extends State<LoginPage> {
         await supabase.auth.signUp(
           email: email,
           password: password,
+          data: {
+            'full_name': name,
+            'class_name': className,
+          },
         );
 
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Pendaftaran berhasil. Silakan masuk jika diminta verifikasi email.'),
+            content: Text(
+              'Pendaftaran berhasil. Silakan verifikasi email jika diminta, lalu masuk.',
+            ),
           ),
         );
       } else {
@@ -214,9 +230,23 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    nameController.dispose();
+    classController.dispose();
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
+  }
+
+  InputDecoration fieldDecoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    );
   }
 
   @override
@@ -227,7 +257,11 @@ class _LoginPageState extends State<LoginPage> {
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF701827), Color(0xFFB65D3E), Color(0xFF4C2B25)],
+                colors: [
+                  Color(0xFF701827),
+                  Color(0xFFB65D3E),
+                  Color(0xFF4C2B25),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -310,31 +344,43 @@ class _LoginPageState extends State<LoginPage> {
                             style: const TextStyle(color: brown),
                           ),
                           const SizedBox(height: 25),
+
+                          if (isRegister) ...[
+                            TextField(
+                              controller: nameController,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: fieldDecoration(
+                                'Nama lengkap',
+                                Icons.person_outline,
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                            TextField(
+                              controller: classController,
+                              decoration: fieldDecoration(
+                                'Kelas',
+                                Icons.school_outlined,
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                          ],
+
                           TextField(
                             controller: emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: const Icon(Icons.email_outlined),
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                            decoration: fieldDecoration(
+                              'Email',
+                              Icons.email_outlined,
                             ),
                           ),
                           const SizedBox(height: 15),
                           TextField(
                             controller: passwordController,
                             obscureText: hidePassword,
-                            decoration: InputDecoration(
-                              labelText: 'Password',
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              filled: true,
-                              fillColor: Colors.white,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                            decoration: fieldDecoration(
+                              'Password',
+                              Icons.lock_outline,
+                            ).copyWith(
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   hidePassword
@@ -342,7 +388,9 @@ class _LoginPageState extends State<LoginPage> {
                                       : Icons.visibility_off,
                                 ),
                                 onPressed: () {
-                                  setState(() => hidePassword = !hidePassword);
+                                  setState(() {
+                                    hidePassword = !hidePassword;
+                                  });
                                 },
                               ),
                             ),
@@ -364,7 +412,9 @@ class _LoginPageState extends State<LoginPage> {
                                       color: Colors.white,
                                     )
                                   : Text(
-                                      isRegister ? 'DAFTAR SEKARANG' : 'MASUK',
+                                      isRegister
+                                          ? 'DAFTAR SEKARANG'
+                                          : 'MASUK',
                                       style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         letterSpacing: 1,
@@ -374,9 +424,13 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 10),
                           TextButton(
-                            onPressed: () {
-                              setState(() => isRegister = !isRegister);
-                            },
+                            onPressed: loading
+                                ? null
+                                : () {
+                                    setState(() {
+                                      isRegister = !isRegister;
+                                    });
+                                  },
                             child: Text(
                               isRegister
                                   ? 'Sudah punya akun? Masuk'
@@ -407,7 +461,7 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// DASHBOARD
+// NAVIGASI UTAMA
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -425,17 +479,6 @@ class _HomePageState extends State<HomePage> {
     HistoryPage(),
     ProfilePage(),
   ];
-
-  Future<void> logout() async {
-    await supabase.auth.signOut();
-    if (!mounted) return;
-
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -478,22 +521,54 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+// DASHBOARD DAN HITUNG MUNDUR DARURAT
+
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
 
-  void showSosInfo(BuildContext context) {
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  Timer? sosTimer;
+  int? countdown;
+
+  void startCountdown() {
+    if (countdown != null) return;
+
+    setState(() => countdown = 5);
+
+    sosTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (countdown == 1) {
+        timer.cancel();
+        setState(() => countdown = null);
+        showSosNotActive();
+      } else {
+        setState(() => countdown = countdown! - 1);
+      }
+    });
+  }
+
+  void cancelCountdown() {
+    sosTimer?.cancel();
+    setState(() => countdown = null);
+  }
+
+  void showSosNotActive() {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        icon: const Icon(Icons.warning_rounded, color: red, size: 45),
-        title: const Text('Fitur DARURAT'),
+        icon: const Icon(Icons.info_outline, color: red, size: 45),
+        title: const Text('SOS Belum Aktif'),
         content: const Text(
-          'Tampilan tombol darurat sudah tersedia. '
-          'Pengiriman SOS, GPS, dan notifikasi anggota masih perlu diaktifkan '
-          'dan diuji sebelum digunakan dalam keadaan darurat.',
+          'Hitung mundur selesai, tetapi pengiriman SOS belum diaktifkan. '
+          'GPS, laporan darurat, dan notifikasi anggota masih dalam tahap pengembangan.',
           textAlign: TextAlign.center,
         ),
         actions: [
@@ -504,6 +579,12 @@ class DashboardPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    sosTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -591,12 +672,6 @@ class DashboardPage extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: brown.withOpacity(0.08),
-                          blurRadius: 12,
-                        ),
-                      ],
                     ),
                     child: Row(
                       children: [
@@ -647,19 +722,15 @@ class DashboardPage extends StatelessWidget {
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 22),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 22,
+                      horizontal: 16,
+                    ),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFB52235), Color(0xFF791626)],
                       ),
                       borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: red.withOpacity(0.25),
-                          blurRadius: 15,
-                          offset: const Offset(0, 7),
-                        ),
-                      ],
                     ),
                     child: Column(
                       children: [
@@ -673,7 +744,7 @@ class DashboardPage extends StatelessWidget {
                         ),
                         const SizedBox(height: 14),
                         InkWell(
-                          onTap: () => showSosInfo(context),
+                          onTap: countdown == null ? startCountdown : null,
                           borderRadius: BorderRadius.circular(100),
                           child: Container(
                             width: 135,
@@ -686,20 +757,24 @@ class DashboardPage extends StatelessWidget {
                                 width: 7,
                               ),
                             ),
-                            child: const Column(
+                            child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(
-                                  Icons.sos,
+                                  countdown == null
+                                      ? Icons.sos
+                                      : Icons.timer,
                                   color: red,
-                                  size: 55,
+                                  size: 48,
                                 ),
                                 Text(
-                                  'DARURAT',
-                                  style: TextStyle(
+                                  countdown == null
+                                      ? 'DARURAT'
+                                      : '$countdown',
+                                  style: const TextStyle(
                                     color: maroon,
                                     fontWeight: FontWeight.w900,
-                                    fontSize: 15,
+                                    fontSize: 22,
                                   ),
                                 ),
                               ],
@@ -707,11 +782,59 @@ class DashboardPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 13),
-                        const Text(
-                          'Tekan untuk membuka informasi bantuan',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
+                        if (countdown != null) ...[
+                          const Text(
+                            'SOS akan dilanjutkan setelah hitung mundur.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: cancelCountdown,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                              side: const BorderSide(color: Colors.white),
+                            ),
+                            child: const Text('BATALKAN'),
+                          ),
+                        ] else ...[
+                          const Text(
+                            'Tekan untuk memulai hitung mundur 5 detik.',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.13),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                              SizedBox(width: 9),
+                              Expanded(
+                                child: Text(
+                                  'PERINGATAN: Jangan menekan tombol DARURAT sembarangan. Gunakan hanya saat terjadi keadaan darurat yang sebenarnya.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
@@ -740,11 +863,15 @@ class DashboardPage extends StatelessWidget {
                         Icons.groups,
                         'Grup Sekolah',
                         'Kelola komunitas',
-                        () => ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Buka menu Grup di navigasi bawah.'),
-                          ),
-                        ),
+                        () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Buka menu Grup di navigasi bawah.',
+                              ),
+                            ),
+                          );
+                        },
                       ),
                       menuCard(
                         context,
@@ -817,6 +944,8 @@ class DashboardPage extends StatelessWidget {
   }
 }
 
+// KARTU MENU
+
 Widget menuCard(
   BuildContext context,
   IconData icon,
@@ -866,8 +995,7 @@ void showInfo(BuildContext context, String title) {
     builder: (context) => AlertDialog(
       title: Text(title),
       content: const Text(
-        'Bagian ini sudah disiapkan dalam tampilan aplikasi. '
-        'Fungsinya akan disambungkan pada tahap pengembangan berikutnya.',
+        'Bagian ini masih dalam tahap pengembangan.',
       ),
       actions: [
         TextButton(
@@ -879,17 +1007,219 @@ void showInfo(BuildContext context, String title) {
   );
 }
 
-// GRUP
+// GRUP SEKOLAH
 
-class GroupsPage extends StatelessWidget {
+class GroupsPage extends StatefulWidget {
   const GroupsPage({super.key});
+
+  @override
+  State<GroupsPage> createState() => _GroupsPageState();
+}
+
+class _GroupsPageState extends State<GroupsPage> {
+  bool loading = false;
+
+  Future<List<String>?> askGroupDetails() async {
+    final nameController = TextEditingController();
+    final districtController = TextEditingController();
+
+    final result = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Buat Grup Sekolah'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nama sekolah',
+                hintText: 'Minimal 3 karakter',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: districtController,
+              decoration: const InputDecoration(
+                labelText: 'Kecamatan (opsional)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('BATAL'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, [
+                nameController.text.trim(),
+                districtController.text.trim(),
+              ]);
+            },
+            child: const Text('BUAT'),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    districtController.dispose();
+    return result;
+  }
+
+  Future<String?> askInviteCode() async {
+    final codeController = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Gabung Grup Sekolah'),
+        content: TextField(
+          controller: codeController,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Kode undangan',
+            hintText: 'Masukkan kode dari sekolah',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('BATAL'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(
+                dialogContext,
+                codeController.text.trim(),
+              );
+            },
+            child: const Text('GABUNG'),
+          ),
+        ],
+      ),
+    );
+
+    codeController.dispose();
+    return result;
+  }
+
+  Future<void> createGroup() async {
+    final details = await askGroupDetails();
+    if (details == null) return;
+
+    final name = details[0];
+    final district = details[1];
+
+    if (name.length < 3) {
+      showMessage('Nama sekolah minimal 3 karakter.');
+      return;
+    }
+
+    setState(() => loading = true);
+
+    try {
+      final result = await supabase.rpc(
+        'create_school_group',
+        params: {
+          'p_name': name,
+          'p_district': district.isEmpty ? null : district,
+        },
+      );
+
+      if (!mounted) return;
+
+      if (result is List && result.isNotEmpty) {
+        final row = Map<String, dynamic>.from(result.first as Map);
+        final schoolName = row['school_name']?.toString() ?? name;
+        final inviteCode = row['invite_code']?.toString() ?? '-';
+
+        await showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            icon: const Icon(
+              Icons.check_circle,
+              color: Colors.green,
+              size: 45,
+            ),
+            title: const Text('Grup Berhasil Dibuat'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  schoolName,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 15),
+                const Text('KODE UNDANGAN'),
+                const SizedBox(height: 5),
+                SelectableText(
+                  inviteCode,
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: maroon,
+                    letterSpacing: 2,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Bagikan kode ini kepada anggota PMR sekolah kamu.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('SELESAI'),
+              ),
+            ],
+          ),
+        );
+      } else {
+        showMessage('Grup dibuat, tetapi kode undangan tidak terbaca.');
+      }
+    } catch (e) {
+      showMessage('Gagal membuat grup: $e');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> joinGroup() async {
+    final code = await askInviteCode();
+    if (code == null || code.isEmpty) return;
+
+    setState(() => loading = true);
+
+    try {
+      await supabase.rpc(
+        'join_school_group',
+        params: {'p_invite_code': code},
+      );
+
+      showMessage('Berhasil bergabung dengan grup sekolah!');
+    } catch (e) {
+      showMessage('Gagal bergabung: $e');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  void showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('GRUP SEKOLAH'),
-      ),
+      appBar: AppBar(title: const Text('GRUP SEKOLAH')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -916,7 +1246,7 @@ class GroupsPage extends StatelessWidget {
               foregroundColor: Colors.white,
               padding: const EdgeInsets.all(16),
             ),
-            onPressed: () => showInfo(context, 'Buat Grup Sekolah'),
+            onPressed: loading ? null : createGroup,
             icon: const Icon(Icons.add),
             label: const Text('BUAT GRUP SEKOLAH'),
           ),
@@ -926,15 +1256,22 @@ class GroupsPage extends StatelessWidget {
               foregroundColor: maroon,
               padding: const EdgeInsets.all(16),
             ),
-            onPressed: () => showInfo(context, 'Gabung Grup'),
+            onPressed: loading ? null : joinGroup,
             icon: const Icon(Icons.login),
             label: const Text('GABUNG DENGAN KODE'),
           ),
+          if (loading) ...[
+            const SizedBox(height: 20),
+            const Center(child: CircularProgressIndicator()),
+          ],
           const SizedBox(height: 20),
           const Text(
-            'Fitur grup dan kode undangan akan disambungkan ke database Supabase.',
+            'Pembuat grup otomatis menjadi admin sekolah. Anggota yang bergabung menggunakan kode akan menjadi member.',
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.black54, fontSize: 12),
+            style: TextStyle(
+              color: Colors.black54,
+              fontSize: 12,
+            ),
           ),
         ],
       ),
@@ -951,12 +1288,12 @@ class HistoryPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('RIWAYAT DARURAT')),
-      body: Center(
+      body: const Center(
         child: Padding(
-          padding: const EdgeInsets.all(25),
+          padding: EdgeInsets.all(25),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
+            children: [
               Icon(Icons.history, size: 75, color: maroon),
               SizedBox(height: 15),
               Text(
@@ -980,7 +1317,7 @@ class HistoryPage extends StatelessWidget {
   }
 }
 
-// PROFIL
+// PROFIL ANGGOTA
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -999,61 +1336,100 @@ class ProfilePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final email = supabase.auth.currentUser?.email ?? '-';
+    final userId = supabase.auth.currentUser?.id;
 
     return Scaffold(
       appBar: AppBar(title: const Text('PROFIL ANGGOTA')),
-      body: ListView(
-        padding: const EdgeInsets.all(22),
-        children: [
-          const SizedBox(height: 20),
-          const CircleAvatar(
-            radius: 48,
-            backgroundColor: Color(0xFFF0DADD),
-            child: Icon(Icons.person, color: maroon, size: 55),
-          ),
-          const SizedBox(height: 15),
-          const Text(
-            'Anggota PMR',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: maroon,
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            email,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black54),
-          ),
-          const SizedBox(height: 30),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.email, color: maroon),
-              title: const Text('Email Akun'),
-              subtitle: Text(email),
-            ),
-          ),
-          Card(
-            child: const ListTile(
-              leading: Icon(Icons.groups, color: maroon),
-              title: Text('Grup Sekolah'),
-              subtitle: Text('Belum terhubung'),
-            ),
-          ),
-          const SizedBox(height: 25),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: maroon,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.all(15),
-            ),
-            onPressed: () => logout(context),
-            icon: const Icon(Icons.logout),
-            label: const Text('KELUAR DARI AKUN'),
-          ),
-        ],
+      body: FutureBuilder<Map<String, dynamic>?>(
+        future: userId == null
+            ? Future.value(null)
+            : supabase
+                .from('profiles')
+                .select('full_name, class_name, phone')
+                .eq('user_id', userId)
+                .maybeSingle(),
+        builder: (context, snapshot) {
+          final profile = snapshot.data;
+          final name = profile?['full_name']?.toString() ?? 'Anggota PMR';
+          final className = profile?['class_name']?.toString() ?? '-';
+          final phone = profile?['phone']?.toString() ?? '-';
+
+          return ListView(
+            padding: const EdgeInsets.all(22),
+            children: [
+              const SizedBox(height: 20),
+              const CircleAvatar(
+                radius: 48,
+                backgroundColor: Color(0xFFF0DADD),
+                child: Icon(Icons.person, color: maroon, size: 55),
+              ),
+              const SizedBox(height: 15),
+              Text(
+                name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: maroon,
+                  fontSize: 23,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                email,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.black54),
+              ),
+              const SizedBox(height: 30),
+              if (snapshot.connectionState == ConnectionState.waiting)
+                const Center(child: CircularProgressIndicator()),
+              if (snapshot.hasError)
+                const Text(
+                  'Data profil belum dapat dimuat.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: red),
+                ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.person, color: maroon),
+                  title: const Text('Nama Lengkap'),
+                  subtitle: Text(name),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.school, color: maroon),
+                  title: const Text('Kelas'),
+                  subtitle: Text(className),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.email, color: maroon),
+                  title: const Text('Email Akun'),
+                  subtitle: Text(email),
+                ),
+              ),
+              Card(
+                child: ListTile(
+                  leading: const Icon(Icons.phone, color: maroon),
+                  title: const Text('Nomor Telepon'),
+                  subtitle: Text(phone),
+                ),
+              ),
+              const SizedBox(height: 25),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: maroon,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(15),
+                ),
+                onPressed: () => logout(context),
+                icon: const Icon(Icons.logout),
+                label: const Text('KELUAR DARI AKUN'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
