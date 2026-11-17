@@ -10,6 +10,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Ambil kode repository
         uses: actions/checkout@v4
@@ -23,12 +24,25 @@ jobs:
         run: |
           flutter create --platforms=android --project-name pmr_emergency_v2 app
           cp lib/main.dart app/lib/main.dart
+
+      - name: Atur izin internet
+        run: |
           sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET"/>' app/android/app/src/main/AndroidManifest.xml
 
       - name: Tambahkan Supabase
         run: |
           cd app
           flutter pub add supabase_flutter
+
+      - name: Tampilkan Android Application ID
+        run: |
+          echo "=== ANDROID APPLICATION ID ==="
+          grep -n "applicationId" app/android/app/build.gradle.kts || grep -n "applicationId" app/android/app/build.gradle
+
+      - name: Periksa proyek Flutter
+        run: |
+          cd app
+          flutter analyze
 
       - name: Bangun APK
         run: |
