@@ -1,0 +1,36 @@
+
+name: Build PMR Emergency V2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil kode repository
+        uses: actions/checkout@v4
+
+      - name: Siapkan Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Buat proyek Flutter
+        run: |
+          flutter create --platforms=android --project-name pmr_emergency_v2 app
+
+      - name: Bangun APK
+        run: |
+          cd app
+          flutter build apk --release
+
+      - name: Simpan APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: PMR-EMERGENCY-V2-APK
+          path: app/build/app/outputs/flutter-apk/app-release.apk
