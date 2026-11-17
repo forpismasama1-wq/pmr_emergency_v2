@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const supabaseUrl = 'https://ohrjcryavbljkpjqcbxc.supabase.co/rest/v1/';
+const supabaseUrl = 'https://ohrjcryavbljkpjqcbxc.supabase.co';
 const supabaseAnonKey = 'sb_publishable_06FNKGYFiebdBkoVySmrPQ_mQ-CyMll';
 
 Future<void> main() async {
