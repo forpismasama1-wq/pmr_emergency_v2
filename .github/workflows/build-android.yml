@@ -19,10 +19,11 @@ jobs:
         with:
           channel: stable
 
-      - name: Buat proyek Flutter
+            - name: Buat proyek Flutter
         run: |
           flutter create --platforms=android --project-name pmr_emergency_v2 app
           cp lib/main.dart app/lib/main.dart
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET"/>' app/android/app/src/main/AndroidManifest.xml
 
       - name: Tambahkan Supabase
         run: |
