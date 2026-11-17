@@ -29,7 +29,7 @@ class PmrEmergencyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'PMR EMERGENCY',
+      title: 'PMR EMERGENCY V2',
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(seedColor: maroon),
@@ -40,12 +40,40 @@ class PmrEmergencyApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const LoginPage(),
+      home: const AuthGate(),
     );
   }
 }
 
-// BACKGROUND BATIK
+// LOGIN OTOMATIS
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<AuthState>(
+      stream: supabase.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final session =
+            snapshot.data?.session ?? supabase.auth.currentSession;
+
+        if (session != null) return const HomePage();
+
+        if (!snapshot.hasData &&
+            snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        return const LoginPage();
+      },
+    );
+  }
+}
+
+// MOTIF BATIK
 
 class BatikBackground extends StatelessWidget {
   const BatikBackground({super.key});
@@ -93,49 +121,29 @@ class BatikPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// LOGO SEMENTARA
-
-class BrandLogo extends StatelessWidget {
-  final String text;
-  final IconData icon;
-  final Color color;
-
-  const BrandLogo({
-    super.key,
-    required this.text,
-    required this.icon,
-    this.color = maroon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            border: Border.all(color: color, width: 2),
-          ),
-          child: Icon(icon, color: color, size: 30),
-        ),
-        const SizedBox(height: 5),
-        Text(
-          text,
-          style: const TextStyle(
-            color: brown,
-            fontWeight: FontWeight.bold,
-            fontSize: 10,
-          ),
-        ),
-      ],
-    );
-  }
+void showMessage(BuildContext context, String message) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(content: Text(message)),
+  );
 }
 
-// LOGIN DAN PENDAFTARAN
+void showInfo(BuildContext context, String title) {
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: Text(title),
+      content: const Text('Bagian ini masih dalam tahap pengembangan.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('TUTUP'),
+        ),
+      ],
+    ),
+  );
+}
+
+// LOGIN DAN DAFTAR
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -154,6 +162,18 @@ class _LoginPageState extends State<LoginPage> {
   bool loading = false;
   bool hidePassword = true;
 
+  InputDecoration decoration(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon),
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+      ),
+    );
+  }
+
   Future<void> submit() async {
     final name = nameController.text.trim();
     final className = classController.text.trim();
@@ -161,20 +181,12 @@ class _LoginPageState extends State<LoginPage> {
     final password = passwordController.text;
 
     if (isRegister && (name.isEmpty || className.isEmpty)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Nama lengkap dan kelas wajib diisi.'),
-        ),
-      );
+      showMessage(context, 'Nama dan kelas wajib diisi.');
       return;
     }
 
     if (email.isEmpty || password.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Masukkan email dan password minimal 6 karakter.'),
-        ),
-      );
+      showMessage(context, 'Email dan password minimal 6 karakter.');
       return;
     }
 
@@ -191,38 +203,22 @@ class _LoginPageState extends State<LoginPage> {
           },
         );
 
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Pendaftaran berhasil. Silakan verifikasi email jika diminta, lalu masuk.',
-            ),
-          ),
-        );
+        if (mounted) {
+          showMessage(
+            context,
+            'Pendaftaran berhasil. Verifikasi email jika diminta, lalu masuk.',
+          );
+        }
       } else {
         await supabase.auth.signInWithPassword(
           email: email,
           password: password,
         );
-
-        if (!mounted) return;
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
-        );
       }
     } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      if (mounted) showMessage(context, e.message);
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Terjadi kesalahan: $e')),
-      );
+      if (mounted) showMessage(context, 'Terjadi kesalahan: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -235,18 +231,6 @@ class _LoginPageState extends State<LoginPage> {
     emailController.dispose();
     passwordController.dispose();
     super.dispose();
-  }
-
-  InputDecoration fieldDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      prefixIcon: Icon(icon),
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-      ),
-    );
   }
 
   @override
@@ -274,21 +258,12 @@ class _LoginPageState extends State<LoginPage> {
                 padding: const EdgeInsets.all(22),
                 child: Column(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        BrandLogo(
-                          text: 'PMI',
-                          icon: Icons.health_and_safety,
-                        ),
-                        SizedBox(width: 28),
-                        BrandLogo(
-                          text: 'FORPIS MASAMA',
-                          icon: Icons.groups,
-                        ),
-                      ],
+                    const Icon(
+                      Icons.health_and_safety,
+                      color: Colors.white,
+                      size: 65,
                     ),
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 12),
                     const Text(
                       'PMR EMERGENCY',
                       style: TextStyle(
@@ -298,30 +273,19 @@ class _LoginPageState extends State<LoginPage> {
                         letterSpacing: 1.5,
                       ),
                     ),
-                    const SizedBox(height: 5),
                     const Text(
                       'SATU TEKANAN, SELURUH ANGGOTA SIAGA',
-                      textAlign: TextAlign.center,
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
-                        letterSpacing: 1,
                       ),
                     ),
                     const SizedBox(height: 28),
                     Container(
                       padding: const EdgeInsets.all(23),
                       decoration: BoxDecoration(
-                        color: cream.withOpacity(0.96),
+                        color: cream,
                         borderRadius: BorderRadius.circular(25),
-                        border: Border.all(color: Colors.white70),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.2),
-                            blurRadius: 25,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -335,94 +299,68 @@ class _LoginPageState extends State<LoginPage> {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
-                          const SizedBox(height: 7),
-                          Text(
-                            isRegister
-                                ? 'Daftarkan akun anggota kamu'
-                                : 'Masuk untuk melanjutkan',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: brown),
-                          ),
-                          const SizedBox(height: 25),
-
+                          const SizedBox(height: 20),
                           if (isRegister) ...[
                             TextField(
                               controller: nameController,
-                              textCapitalization: TextCapitalization.words,
-                              decoration: fieldDecoration(
+                              decoration: decoration(
                                 'Nama lengkap',
-                                Icons.person_outline,
+                                Icons.person,
                               ),
                             ),
-                            const SizedBox(height: 15),
+                            const SizedBox(height: 12),
                             TextField(
                               controller: classController,
-                              decoration: fieldDecoration(
+                              decoration: decoration(
                                 'Kelas',
-                                Icons.school_outlined,
+                                Icons.school,
                               ),
                             ),
-                            const SizedBox(height: 15),
+                            const SizedBox(height: 12),
                           ],
-
                           TextField(
                             controller: emailController,
                             keyboardType: TextInputType.emailAddress,
-                            decoration: fieldDecoration(
-                              'Email',
-                              Icons.email_outlined,
-                            ),
+                            decoration: decoration('Email', Icons.email),
                           ),
-                          const SizedBox(height: 15),
+                          const SizedBox(height: 12),
                           TextField(
                             controller: passwordController,
                             obscureText: hidePassword,
-                            decoration: fieldDecoration(
+                            decoration: decoration(
                               'Password',
-                              Icons.lock_outline,
+                              Icons.lock,
                             ).copyWith(
                               suffixIcon: IconButton(
-                                icon: Icon(
-                                  hidePassword
-                                      ? Icons.visibility
-                                      : Icons.visibility_off,
-                                ),
                                 onPressed: () {
                                   setState(() {
                                     hidePassword = !hidePassword;
                                   });
                                 },
+                                icon: Icon(
+                                  hidePassword
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
                               ),
                             ),
                           ),
-                          const SizedBox(height: 23),
+                          const SizedBox(height: 22),
                           SizedBox(
-                            height: 53,
+                            height: 52,
                             child: ElevatedButton(
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: maroon,
                                 foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
                               ),
                               onPressed: loading ? null : submit,
                               child: loading
                                   ? const CircularProgressIndicator(
                                       color: Colors.white,
                                     )
-                                  : Text(
-                                      isRegister
-                                          ? 'DAFTAR SEKARANG'
-                                          : 'MASUK',
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 1,
-                                      ),
-                                    ),
+                                  : Text(isRegister ? 'DAFTAR' : 'MASUK'),
                             ),
                           ),
-                          const SizedBox(height: 10),
                           TextButton(
                             onPressed: loading
                                 ? null
@@ -439,15 +377,6 @@ class _LoginPageState extends State<LoginPage> {
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'SIAGA • PEDULI • TANGGAP',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
                       ),
                     ),
                   ],
@@ -521,7 +450,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// DASHBOARD DAN HITUNG MUNDUR DARURAT
+// DASHBOARD
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -531,7 +460,7 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  Timer? sosTimer;
+  Timer? timer;
   int? countdown;
 
   void startCountdown() {
@@ -539,51 +468,43 @@ class _DashboardPageState extends State<DashboardPage> {
 
     setState(() => countdown = 5);
 
-    sosTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) {
-        timer.cancel();
+        t.cancel();
         return;
       }
 
       if (countdown == 1) {
-        timer.cancel();
+        t.cancel();
         setState(() => countdown = null);
-        showSosNotActive();
+
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            icon: const Icon(Icons.info_outline, color: red, size: 45),
+            title: const Text('SOS Belum Aktif'),
+            content: const Text(
+              'Hitung mundur selesai, tetapi pengiriman SOS, GPS, '
+              'dan notifikasi anggota belum diaktifkan.',
+              textAlign: TextAlign.center,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('MENGERTI'),
+              ),
+            ],
+          ),
+        );
       } else {
         setState(() => countdown = countdown! - 1);
       }
     });
   }
 
-  void cancelCountdown() {
-    sosTimer?.cancel();
-    setState(() => countdown = null);
-  }
-
-  void showSosNotActive() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        icon: const Icon(Icons.info_outline, color: red, size: 45),
-        title: const Text('SOS Belum Aktif'),
-        content: const Text(
-          'Hitung mundur selesai, tetapi pengiriman SOS belum diaktifkan. '
-          'GPS, laporan darurat, dan notifikasi anggota masih dalam tahap pengembangan.',
-          textAlign: TextAlign.center,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('MENGERTI'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   void dispose() {
-    sosTimer?.cancel();
+    timer?.cancel();
     super.dispose();
   }
 
@@ -596,68 +517,17 @@ class _DashboardPageState extends State<DashboardPage> {
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
-            expandedHeight: 190,
+            expandedHeight: 180,
             pinned: true,
-            backgroundColor: maroon,
-            title: const Text(
-              'PMR EMERGENCY',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            actions: [
-              IconButton(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Notifikasi belum diaktifkan.'),
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.notifications_none),
-              ),
-            ],
+            title: const Text('PMR EMERGENCY'),
             flexibleSpace: FlexibleSpaceBar(
-              background: Stack(
-                children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [maroon, red, brown],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [maroon, red, brown],
                   ),
-                  const BatikBackground(),
-                  const Positioned(
-                    left: 22,
-                    bottom: 22,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'SELAMAT DATANG',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                        SizedBox(height: 5),
-                        Text(
-                          'Relawan Siaga!',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 25,
-                          ),
-                        ),
-                        Text(
-                          'Bersama kita peduli dan tanggap.',
-                          style: TextStyle(color: Colors.white70),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
+                child: const BatikBackground(),
               ),
             ),
           ),
@@ -667,68 +537,31 @@ class _DashboardPageState extends State<DashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(17),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      children: [
-                        const CircleAvatar(
-                          radius: 26,
-                          backgroundColor: Color(0xFFF5E2E3),
-                          child: Icon(
-                            Icons.person,
-                            color: maroon,
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Akun Anggota',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: brown,
-                                ),
-                              ),
-                              Text(
-                                email,
-                                style: const TextStyle(
-                                  color: Colors.black54,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.verified_user, color: Colors.green),
-                      ],
+                  Card(
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        backgroundColor: Color(0xFFF5E2E3),
+                        child: Icon(Icons.person, color: maroon),
+                      ),
+                      title: const Text('Akun Anggota'),
+                      subtitle: Text(email),
                     ),
                   ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 20),
                   const Text(
                     'PUSAT DARURAT',
                     style: TextStyle(
                       color: maroon,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
                     ),
                   ),
                   const SizedBox(height: 12),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 22,
-                      horizontal: 16,
-                    ),
+                    padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
-                        colors: [Color(0xFFB52235), Color(0xFF791626)],
+                        colors: [red, Color(0xFF791626)],
                       ),
                       borderRadius: BorderRadius.circular(24),
                     ),
@@ -737,15 +570,13 @@ class _DashboardPageState extends State<DashboardPage> {
                         const Text(
                           'BUTUH BANTUAN?',
                           style: TextStyle(
-                            color: Colors.white70,
+                            color: Colors.white,
                             letterSpacing: 2,
-                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 15),
                         InkWell(
                           onTap: countdown == null ? startCountdown : null,
-                          borderRadius: BorderRadius.circular(100),
                           child: Container(
                             width: 135,
                             height: 135,
@@ -781,60 +612,34 @@ class _DashboardPageState extends State<DashboardPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 13),
+                        const SizedBox(height: 12),
                         if (countdown != null) ...[
                           const Text(
                             'SOS akan dilanjutkan setelah hitung mundur.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                            ),
+                            style: TextStyle(color: Colors.white),
                           ),
-                          const SizedBox(height: 10),
                           OutlinedButton(
-                            onPressed: cancelCountdown,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Colors.white),
+                            onPressed: () {
+                              timer?.cancel();
+                              setState(() => countdown = null);
+                            },
+                            child: const Text(
+                              'BATALKAN',
+                              style: TextStyle(color: Colors.white),
                             ),
-                            child: const Text('BATALKAN'),
                           ),
-                        ] else ...[
+                        ] else
                           const Text(
                             'Tekan untuk memulai hitung mundur 5 detik.',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                            ),
+                            style: TextStyle(color: Colors.white70),
                           ),
-                        ],
-                        const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.13),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Icon(
-                                Icons.warning_amber_rounded,
-                                color: Colors.white,
-                                size: 22,
-                              ),
-                              SizedBox(width: 9),
-                              Expanded(
-                                child: Text(
-                                  'PERINGATAN: Jangan menekan tombol DARURAT sembarangan. Gunakan hanya saat terjadi keadaan darurat yang sebenarnya.',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 11,
-                                  ),
-                                ),
-                              ),
-                            ],
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Gunakan tombol DARURAT hanya saat keadaan darurat sebenarnya.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
                           ),
                         ),
                       ],
@@ -846,7 +651,6 @@ class _DashboardPageState extends State<DashboardPage> {
                     style: TextStyle(
                       color: maroon,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 1,
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -859,36 +663,32 @@ class _DashboardPageState extends State<DashboardPage> {
                     childAspectRatio: 1.45,
                     children: [
                       menuCard(
-                        context,
                         Icons.groups,
                         'Grup Sekolah',
                         'Kelola komunitas',
-                        () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Buka menu Grup di navigasi bawah.',
-                              ),
-                            ),
-                          );
-                        },
+                        () => showMessage(
+                          context,
+                          'Buka menu Grup di navigasi bawah.',
+                        ),
                       ),
                       menuCard(
-                        context,
                         Icons.map,
                         'Peta Lokasi',
                         'Lokasi kejadian',
                         () => showInfo(context, 'Peta Lokasi'),
                       ),
                       menuCard(
-                        context,
                         Icons.medical_services,
                         'Edukasi P3K',
                         'Panduan pertolongan',
-                        () => showInfo(context, 'Edukasi P3K'),
+                        () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const FirstAidPage(),
+                          ),
+                        ),
                       ),
                       menuCard(
-                        context,
                         Icons.notifications_active,
                         'Notifikasi',
                         'Informasi siaga',
@@ -902,38 +702,21 @@ class _DashboardPageState extends State<DashboardPage> {
                     decoration: BoxDecoration(
                       color: const Color(0xFFF2E5D8),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFFE2CBB6)),
                     ),
                     child: const Row(
                       children: [
                         Icon(Icons.favorite, color: maroon, size: 32),
                         SizedBox(width: 12),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'SIAGA • PEDULI • TANGGAP',
-                                style: TextStyle(
-                                  color: maroon,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                'Menjadi relawan berarti siap membantu sesama.',
-                                style: TextStyle(
-                                  color: brown,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
+                          child: Text(
+                            'SIAGA • PEDULI • TANGGAP\n'
+                            'Menjadi relawan berarti siap membantu sesama.',
+                            style: TextStyle(color: brown),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 20),
                 ],
               ),
             ),
@@ -944,10 +727,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 }
 
-// KARTU MENU
-
 Widget menuCard(
-  BuildContext context,
   IconData icon,
   String title,
   String subtitle,
@@ -989,22 +769,276 @@ Widget menuCard(
   );
 }
 
-void showInfo(BuildContext context, String title) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: const Text(
-        'Bagian ini masih dalam tahap pengembangan.',
+// EDUKASI P3K OFFLINE
+
+class FirstAidPage extends StatelessWidget {
+  const FirstAidPage({super.key});
+
+  static const materials = [
+    {
+      'title': 'Luka dan Perdarahan',
+      'icon': Icons.bloodtype,
+      'body': '''
+1. Pastikan lokasi aman dan gunakan sarung tangan jika tersedia.
+2. Tekan luka langsung menggunakan kasa atau kain bersih.
+3. Pertahankan tekanan sampai perdarahan terkendali.
+4. Jika darah menembus kain, tambahkan kain di atasnya.
+5. Jangan mencabut benda yang tertancap pada luka.
+6. Segera cari bantuan medis jika perdarahan berat atau korban lemas.
+''',
+    },
+    {
+      'title': 'Mimisan',
+      'icon': Icons.face,
+      'body': '''
+1. Dudukkan korban dengan posisi tegak.
+2. Condongkan kepala sedikit ke depan.
+3. Jepit bagian lunak hidung selama 10–15 menit tanpa dilepas.
+4. Minta korban bernapas melalui mulut.
+5. Jangan mendongakkan kepala.
+6. Jangan memasukkan tisu jauh ke dalam hidung.
+
+Cari bantuan medis jika perdarahan tidak berhenti atau sangat banyak.
+''',
+    },
+    {
+      'title': 'Luka Bakar',
+      'icon': Icons.local_fire_department,
+      'body': '''
+1. Jauhkan korban dari sumber panas jika aman.
+2. Alirkan air bersih yang sejuk selama 20 menit.
+3. Lepaskan perhiasan atau pakaian di sekitar luka jika tidak menempel.
+4. Tutup luka secara longgar dengan penutup bersih.
+5. Jangan gunakan es, pasta gigi, mentega, atau minyak.
+6. Jangan memecahkan lepuhan.
+
+Cari bantuan medis untuk luka luas, dalam, atau mengenai area sensitif.
+''',
+    },
+    {
+      'title': 'Pingsan',
+      'icon': Icons.air,
+      'body': '''
+1. Pastikan lingkungan aman.
+2. Baringkan korban jika tidak ada dugaan cedera.
+3. Periksa respons dan pernapasannya.
+4. Jika bernapas normal tetapi belum sadar, posisikan miring jika aman.
+5. Jangan memberikan makanan atau minuman kepada orang yang belum sadar.
+6. Jika tidak bernapas normal, minta bantuan darurat dan mulai CPR jika mampu.
+
+Cari bantuan segera jika korban tidak cepat sadar atau sulit bernapas.
+''',
+    },
+    {
+      'title': 'Keseleo',
+      'icon': Icons.healing,
+      'body': '''
+1. Hentikan aktivitas dan lindungi bagian yang cedera.
+2. Istirahatkan bagian tubuh tersebut.
+3. Gunakan kompres dingin yang dibungkus kain selama 15–20 menit.
+4. Gunakan balutan elastis jika tersedia, jangan terlalu ketat.
+5. Tinggikan bagian yang cedera jika memungkinkan.
+6. Jangan memijat atau memaksakan bagian yang sakit.
+
+Periksakan jika nyeri berat, bentuk anggota tubuh berubah, atau tidak bisa menapak.
+''',
+    },
+    {
+      'title': 'Tersedak',
+      'icon': Icons.warning,
+      'body': '''
+1. Jika korban masih bisa batuk kuat, dorong untuk terus batuk.
+2. Jika tidak dapat berbicara, batuk, atau bernapas, minta bantuan darurat.
+3. Pada orang dewasa dan anak di atas 1 tahun dengan sumbatan berat, penolong terlatih dapat memberikan 5 tepukan punggung dan 5 dorongan perut secara bergantian.
+4. Untuk bayi di bawah 1 tahun, gunakan teknik tepukan punggung dan dorongan dada khusus bayi. Jangan melakukan dorongan perut.
+5. Jika korban tidak sadar, hubungi layanan darurat dan mulai CPR sesuai kemampuan.
+6. Jangan mengorek mulut secara membabi buta.
+
+Teknik pertolongan tersedak perlu dipelajari melalui pelatihan langsung.
+''',
+    },
+    {
+      'title': 'Kejang',
+      'icon': Icons.monitor_heart,
+      'body': '''
+1. Jauhkan benda berbahaya dari sekitar korban.
+2. Lindungi kepala dengan benda lembut.
+3. Catat berapa lama kejang berlangsung.
+4. Jangan menahan gerakan tubuh korban.
+5. Jangan memasukkan benda atau jari ke mulut.
+6. Setelah kejang berhenti, periksa pernapasan dan posisikan miring jika bernapas normal.
+
+Hubungi bantuan darurat jika kejang lebih dari 5 menit, berulang, pertama kali terjadi, atau korban sulit bernapas.
+''',
+    },
+    {
+      'title': 'CPR dan AED',
+      'icon': Icons.favorite,
+      'body': '''
+1. Pastikan tempat aman.
+2. Periksa respons korban.
+3. Minta orang lain menghubungi layanan darurat dan mengambil AED jika tersedia.
+4. Jika korban tidak responsif dan tidak bernapas normal, mulai CPR jika mampu.
+5. Untuk orang dewasa, penolong awam yang tidak terlatih dapat melakukan kompresi dada di tengah dada dengan kecepatan 100–120 kali per menit.
+6. Gunakan AED segera setelah tersedia dan ikuti instruksi alat.
+
+Pelatihan CPR langsung sangat dianjurkan. Teknik untuk bayi dan anak berbeda dari orang dewasa.
+''',
+    },
+    {
+      'title': 'Isi Kotak P3K',
+      'icon': Icons.medical_services,
+      'body': '''
+Perlengkapan yang dapat disiapkan:
+• Kasa steril.
+• Perban gulung.
+• Plester luka.
+• Plester perekat medis.
+• Sarung tangan sekali pakai.
+• Gunting kecil.
+• Cairan pembersih luka yang sesuai.
+• Masker pelindung CPR.
+• Selimut darurat.
+• Kantong sampah medis.
+
+Periksa tanggal kedaluwarsa dan kondisi perlengkapan secara berkala.
+''',
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('EDUKASI P3K')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: maroon,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: const Column(
+              children: [
+                Icon(
+                  Icons.medical_services,
+                  color: Colors.white,
+                  size: 42,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'PANDUAN PERTOLONGAN PERTAMA',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                  ),
+                ),
+                SizedBox(height: 5),
+                Text(
+                  'Materi tersimpan di aplikasi dan dapat dibuka tanpa internet.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          for (final item in materials)
+            Card(
+              margin: const EdgeInsets.only(bottom: 10),
+              child: ListTile(
+                contentPadding: const EdgeInsets.all(14),
+                leading: Icon(
+                  item['icon'] as IconData,
+                  color: maroon,
+                  size: 30,
+                ),
+                title: Text(
+                  item['title'] as String,
+                  style: const TextStyle(
+                    color: maroon,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => FirstAidDetailPage(
+                        title: item['title'] as String,
+                        body: item['body'] as String,
+                        icon: item['icon'] as IconData,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          const SizedBox(height: 12),
+          const Text(
+            'Catatan: Materi ini merupakan panduan dasar, bukan pengganti pelatihan P3K atau tenaga medis. Dalam keadaan darurat, hubungi layanan darurat setempat.',
+            style: TextStyle(
+              color: brown,
+              fontSize: 12,
+            ),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('TUTUP'),
-        ),
-      ],
-    ),
-  );
+    );
+  }
+}
+
+class FirstAidDetailPage extends StatelessWidget {
+  final String title;
+  final String body;
+  final IconData icon;
+
+  const FirstAidDetailPage({
+    super.key,
+    required this.title,
+    required this.body,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Icon(icon, color: maroon, size: 65),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: maroon,
+              fontWeight: FontWeight.bold,
+              fontSize: 23,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text(
+                body,
+                style: const TextStyle(
+                  fontSize: 15,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // GRUP SEKOLAH
@@ -1019,11 +1053,11 @@ class GroupsPage extends StatefulWidget {
 class _GroupsPageState extends State<GroupsPage> {
   bool loading = false;
 
-  Future<List<String>?> askGroupDetails() async {
+  Future<void> createGroup() async {
     final nameController = TextEditingController();
     final districtController = TextEditingController();
 
-    final result = await showDialog<List<String>>(
+    final details = await showDialog<List<String>>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Buat Grup Sekolah'),
@@ -1034,10 +1068,8 @@ class _GroupsPageState extends State<GroupsPage> {
               controller: nameController,
               decoration: const InputDecoration(
                 labelText: 'Nama sekolah',
-                hintText: 'Minimal 3 karakter',
               ),
             ),
-            const SizedBox(height: 12),
             TextField(
               controller: districtController,
               decoration: const InputDecoration(
@@ -1066,55 +1098,11 @@ class _GroupsPageState extends State<GroupsPage> {
 
     nameController.dispose();
     districtController.dispose();
-    return result;
-  }
 
-  Future<String?> askInviteCode() async {
-    final codeController = TextEditingController();
-
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Gabung Grup Sekolah'),
-        content: TextField(
-          controller: codeController,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(
-            labelText: 'Kode undangan',
-            hintText: 'Masukkan kode dari sekolah',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('BATAL'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(
-                dialogContext,
-                codeController.text.trim(),
-              );
-            },
-            child: const Text('GABUNG'),
-          ),
-        ],
-      ),
-    );
-
-    codeController.dispose();
-    return result;
-  }
-
-  Future<void> createGroup() async {
-    final details = await askGroupDetails();
     if (details == null) return;
 
-    final name = details[0];
-    final district = details[1];
-
-    if (name.length < 3) {
-      showMessage('Nama sekolah minimal 3 karakter.');
+    if (details[0].length < 3) {
+      showMessage(context, 'Nama sekolah minimal 3 karakter.');
       return;
     }
 
@@ -1124,8 +1112,8 @@ class _GroupsPageState extends State<GroupsPage> {
       final result = await supabase.rpc(
         'create_school_group',
         params: {
-          'p_name': name,
-          'p_district': district.isEmpty ? null : district,
+          'p_name': details[0],
+          'p_district': details[1].isEmpty ? null : details[1],
         },
       );
 
@@ -1133,12 +1121,12 @@ class _GroupsPageState extends State<GroupsPage> {
 
       if (result is List && result.isNotEmpty) {
         final row = Map<String, dynamic>.from(result.first as Map);
-        final schoolName = row['school_name']?.toString() ?? name;
+        final schoolName = row['school_name']?.toString() ?? details[0];
         final inviteCode = row['invite_code']?.toString() ?? '-';
 
         await showDialog(
           context: context,
-          builder: (dialogContext) => AlertDialog(
+          builder: (_) => AlertDialog(
             icon: const Icon(
               Icons.check_circle,
               color: Colors.green,
@@ -1148,49 +1136,68 @@ class _GroupsPageState extends State<GroupsPage> {
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  schoolName,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 15),
+                Text(schoolName),
+                const SizedBox(height: 12),
                 const Text('KODE UNDANGAN'),
-                const SizedBox(height: 5),
                 SelectableText(
                   inviteCode,
                   style: const TextStyle(
                     fontSize: 24,
-                    fontWeight: FontWeight.bold,
                     color: maroon,
-                    letterSpacing: 2,
+                    fontWeight: FontWeight.bold,
                   ),
-                ),
-                const SizedBox(height: 10),
-                const Text(
-                  'Bagikan kode ini kepada anggota PMR sekolah kamu.',
-                  textAlign: TextAlign.center,
                 ),
               ],
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(dialogContext),
+                onPressed: () => Navigator.pop(context),
                 child: const Text('SELESAI'),
               ),
             ],
           ),
         );
       } else {
-        showMessage('Grup dibuat, tetapi kode undangan tidak terbaca.');
+        showMessage(context, 'Kode undangan tidak terbaca.');
       }
     } catch (e) {
-      showMessage('Gagal membuat grup: $e');
+      showMessage(context, 'Gagal membuat grup: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
   }
 
   Future<void> joinGroup() async {
-    final code = await askInviteCode();
+    final controller = TextEditingController();
+
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Gabung Grup Sekolah'),
+        content: TextField(
+          controller: controller,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(
+            labelText: 'Kode undangan',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('BATAL'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogContext, controller.text.trim());
+            },
+            child: const Text('GABUNG'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+
     if (code == null || code.isEmpty) return;
 
     setState(() => loading = true);
@@ -1201,19 +1208,14 @@ class _GroupsPageState extends State<GroupsPage> {
         params: {'p_invite_code': code},
       );
 
-      showMessage('Berhasil bergabung dengan grup sekolah!');
+      if (mounted) {
+        showMessage(context, 'Berhasil bergabung dengan grup sekolah!');
+      }
     } catch (e) {
-      showMessage('Gagal bergabung: $e');
+      if (mounted) showMessage(context, 'Gagal bergabung: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
-  }
-
-  void showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
   }
 
   @override
@@ -1223,7 +1225,7 @@ class _GroupsPageState extends State<GroupsPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Icon(Icons.groups_rounded, size: 75, color: maroon),
+          const Icon(Icons.groups, size: 75, color: maroon),
           const SizedBox(height: 15),
           const Text(
             'Komunitas PMR',
@@ -1266,12 +1268,9 @@ class _GroupsPageState extends State<GroupsPage> {
           ],
           const SizedBox(height: 20),
           const Text(
-            'Pembuat grup otomatis menjadi admin sekolah. Anggota yang bergabung menggunakan kode akan menjadi member.',
+            'Pembuat grup menjadi admin sekolah. Anggota yang bergabung menggunakan kode menjadi member.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.black54,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Colors.black54, fontSize: 12),
           ),
         ],
       ),
@@ -1306,7 +1305,7 @@ class HistoryPage extends StatelessWidget {
               ),
               SizedBox(height: 8),
               Text(
-                'Riwayat laporan akan muncul di sini setelah sistem laporan darurat diaktifkan.',
+                'Riwayat laporan akan muncul setelah sistem laporan darurat diaktifkan.',
                 textAlign: TextAlign.center,
               ),
             ],
@@ -1319,35 +1318,124 @@ class HistoryPage extends StatelessWidget {
 
 // PROFIL ANGGOTA
 
-class ProfilePage extends StatelessWidget {
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
-  Future<void> logout(BuildContext context) async {
-    await supabase.auth.signOut();
-    if (!context.mounted) return;
+  @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const LoginPage()),
-      (route) => false,
+class _ProfilePageState extends State<ProfilePage> {
+  late Future<Map<String, dynamic>?> profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    loadProfile();
+  }
+
+  void loadProfile() {
+    final userId = supabase.auth.currentUser?.id;
+
+    profileFuture = userId == null
+        ? Future.value(null)
+        : supabase
+            .from('profiles')
+            .select('full_name, class_name, phone')
+            .eq('user_id', userId)
+            .maybeSingle();
+  }
+
+  Future<void> editProfile(
+    String currentName,
+    String currentClass,
+  ) async {
+    final nameController = TextEditingController(text: currentName);
+    final classController = TextEditingController(text: currentClass);
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('EDIT PROFIL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Nama lengkap',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: classController,
+              decoration: const InputDecoration(
+                labelText: 'Kelas',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('BATAL'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('SIMPAN'),
+          ),
+        ],
+      ),
     );
+
+    if (result != true) {
+      nameController.dispose();
+      classController.dispose();
+      return;
+    }
+
+    final name = nameController.text.trim();
+    final className = classController.text.trim();
+
+    nameController.dispose();
+    classController.dispose();
+
+    if (name.isEmpty || className.isEmpty) {
+      showMessage(context, 'Nama dan kelas wajib diisi.');
+      return;
+    }
+
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      await supabase.from('profiles').upsert({
+        'user_id': userId,
+        'full_name': name,
+        'class_name': className,
+      }, onConflict: 'user_id');
+
+      if (!mounted) return;
+
+      setState(loadProfile);
+      showMessage(context, 'Profil berhasil diperbarui!');
+    } catch (e) {
+      showMessage(context, 'Gagal memperbarui profil: $e');
+    }
+  }
+
+  Future<void> logout() async {
+    await supabase.auth.signOut();
   }
 
   @override
   Widget build(BuildContext context) {
     final email = supabase.auth.currentUser?.email ?? '-';
-    final userId = supabase.auth.currentUser?.id;
 
     return Scaffold(
       appBar: AppBar(title: const Text('PROFIL ANGGOTA')),
       body: FutureBuilder<Map<String, dynamic>?>(
-        future: userId == null
-            ? Future.value(null)
-            : supabase
-                .from('profiles')
-                .select('full_name, class_name, phone')
-                .eq('user_id', userId)
-                .maybeSingle(),
+        future: profileFuture,
         builder: (context, snapshot) {
           final profile = snapshot.data;
           final name = profile?['full_name']?.toString() ?? 'Anggota PMR';
@@ -1379,7 +1467,7 @@ class ProfilePage extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: Colors.black54),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 25),
               if (snapshot.connectionState == ConnectionState.waiting)
                 const Center(child: CircularProgressIndicator()),
               if (snapshot.hasError)
@@ -1416,14 +1504,30 @@ class ProfilePage extends StatelessWidget {
                   subtitle: Text(phone),
                 ),
               ),
-              const SizedBox(height: 25),
+              const SizedBox(height: 15),
               ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: maroon,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.all(15),
                 ),
-                onPressed: () => logout(context),
+                onPressed: snapshot.connectionState ==
+                        ConnectionState.waiting
+                    ? null
+                    : () => editProfile(
+                          name,
+                          className == '-' ? '' : className,
+                        ),
+                icon: const Icon(Icons.edit),
+                label: const Text('EDIT PROFIL'),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: maroon,
+                  padding: const EdgeInsets.all(15),
+                ),
+                onPressed: logout,
                 icon: const Icon(Icons.logout),
                 label: const Text('KELUAR DARI AKUN'),
               ),
