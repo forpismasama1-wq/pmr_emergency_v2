@@ -34,15 +34,10 @@ jobs:
           cd app
           flutter pub add supabase_flutter
 
-      - name: Tampilkan Android Application ID
+      - name: Tampilkan Package ID
         run: |
-          echo "=== ANDROID APPLICATION ID ==="
-          grep -n "applicationId" app/android/app/build.gradle.kts || grep -n "applicationId" app/android/app/build.gradle
-
-      - name: Periksa proyek Flutter
-        run: |
-          cd app
-          flutter analyze
+          echo "=== PACKAGE ID ANDROID ==="
+          grep -R "applicationId" app/android/app/
 
       - name: Bangun APK
         run: |
