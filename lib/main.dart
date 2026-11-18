@@ -427,31 +427,116 @@ class _DashboardPageState extends State<DashboardPage> {
   int? countdown;
 
   void startCountdown() {
-    if (countdown != null) return;
-    setState(() => countdown = 5);
-    timer = Timer.periodic(const Duration(seconds: 1), (t) {
-      if (!mounted) { t.cancel(); return; }
-      if (countdown == 1) {
-        t.cancel();
-        setState(() => countdown = null);
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            icon: const Icon(Icons.info_outline, color: red, size: 45),
-            title: const Text('SOS Belum Aktif'),
-            content: const Text(
-              'Pengiriman SOS, GPS, dan notifikasi anggota belum diaktifkan.',
-              textAlign: TextAlign.center),
-            actions: [TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('MENGERTI'))],
-          ),
-        );
-      } else {
-        setState(() => countdown = countdown! - 1);
+  if (countdown != null) return;
+
+  setState(() => countdown = 5);
+
+  timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    if (!mounted) {
+      t.cancel();
+      return;
+    }
+
+    if (countdown == 1) {
+      t.cancel();
+      setState(() => countdown = 0);
+      _sendSos();
+    } else {
+      setState(() => countdown = countdown! - 1);
+    }
+  });
+}
+
+Future<void> _sendSos() async {
+  try {
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      showMessage(context, 'Silakan login terlebih dahulu.');
+      return;
+    }
+
+    final profile = await supabase
+        .from('profiles')
+        .select('active_school_id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    final schoolId = profile?['active_school_id'];
+
+    if (schoolId == null) {
+      showMessage(context, 'Pilih grup sekolah terlebih dahulu.');
+      return;
+    }
+
+    Position? position;
+
+    try {
+      bool serviceEnabled =
+          await Geolocator.isLocationServiceEnabled();
+
+      if (serviceEnabled) {
+        LocationPermission permission =
+            await Geolocator.checkPermission();
+
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+
+        if (permission != LocationPermission.denied &&
+            permission != LocationPermission.deniedForever) {
+          position = await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.high,
+            ),
+          );
+        }
       }
-    });
+    } catch (_) {
+      position = null;
+    }
+
+    final report = await supabase
+        .from('emergency_reports')
+        .insert({
+          'school_id': schoolId,
+          'sender_id': user.id,
+          'message': 'Permintaan bantuan darurat',
+          'latitude': position?.latitude,
+          'longitude': position?.longitude,
+        })
+        .select('id')
+        .single();
+
+    bool notificationSent = true;
+
+    try {
+      await sendPmrNotification(
+        event: 'report_created',
+        body: {'report_id': report['id']},
+      );
+    } catch (_) {
+      notificationSent = false;
+    }
+
+    if (!mounted) return;
+
+    showMessage(
+      context,
+      notificationSent
+          ? 'SOS berhasil dikirim!'
+          : 'SOS tersimpan, tetapi notifikasi gagal dikirim.',
+    );
+  } catch (e) {
+    if (mounted) {
+      showMessage(context, 'Gagal mengirim SOS: $e');
+    }
+  } finally {
+    if (mounted) {
+      setState(() => countdown = null);
+    }
   }
+}
 
   @override
   void dispose() { timer?.cancel(); super.dispose(); }
