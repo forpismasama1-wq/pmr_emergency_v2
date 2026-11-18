@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:geolocator/geolocator.dart';
 
 const supabaseUrl = 'https://ohrjcryavbljkpjqcbxc.supabase.co';
 const supabaseAnonKey = 'sb_publishable_06FNKGYFiebdBkoVySmrPQ_mQ-CyMll';
@@ -1673,4 +1674,17 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+}
+
+Future<void> sendPmrNotification({
+  required String event,
+  required Map<String, dynamic> body,
+}) async {
+  await supabase.functions.invoke(
+    'smooth-service',
+    body: {
+      'event': event,
+      ...body,
+    },
+  );
 }
