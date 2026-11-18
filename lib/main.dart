@@ -1390,7 +1390,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       title: 'Keluar dari grup?',
       message:
           'Kamu akan keluar dari grup ini. '
-          'Riwayat laporan dan tanggapan tetap tersimpan.',
+          'Kamu akan keluar dari grup ini dan tidak lagi dapat mengakses riwayat grup.',
       confirmText: 'YA, KELUAR',
     );
 
