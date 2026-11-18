@@ -289,35 +289,125 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-// NAVIGASI UTAMA
+
+ // NAVIGASI UTAMA
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
 
 class _HomePageState extends State<HomePage> {
   int selectedIndex = 0;
-  final pages = const [DashboardPage(), GroupsPage(), HistoryPage(), ProfilePage()];
+
+  final pages = const [
+    DashboardPage(),
+    GroupsPage(),
+    HistoryPage(),
+    ProfilePage(),
+  ];
+
+  late final StreamSubscription<String> tokenRefreshSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    registerDeviceToken();
+
+    tokenRefreshSubscription =
+        FirebaseMessaging.instance.onTokenRefresh.listen(
+      (token) {
+        saveDeviceToken(token);
+      },
+    );
+  }
+
+  Future<void> registerDeviceToken() async {
+    try {
+      final settings =
+          await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus ==
+          AuthorizationStatus.denied) {
+        return;
+      }
+
+      final token = await FirebaseMessaging.instance.getToken();
+
+      if (token != null) {
+        await saveDeviceToken(token);
+      }
+    } catch (e) {
+      debugPrint('Gagal mengambil token Firebase: $e');
+    }
+  }
+
+  Future<void> saveDeviceToken(String token) async {
+    try {
+      final user = supabase.auth.currentUser;
+
+      if (user == null) return;
+
+      await supabase.from('device_tokens').upsert({
+        'user_id': user.id,
+        'token': token,
+        'platform': 'android',
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'user_id,token');
+
+      debugPrint('Token notifikasi berhasil disimpan.');
+    } catch (e) {
+      debugPrint('Gagal menyimpan token: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    tokenRefreshSubscription.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    body: IndexedStack(index: selectedIndex, children: pages),
+    body: IndexedStack(
+      index: selectedIndex,
+      children: pages,
+    ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: selectedIndex,
-      onDestinationSelected: (index) => setState(() => selectedIndex = index),
+      onDestinationSelected: (index) {
+        setState(() => selectedIndex = index);
+      },
       backgroundColor: Colors.white,
       indicatorColor: const Color(0xFFF4DDE0),
       destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home, color: maroon), label: 'Beranda'),
-        NavigationDestination(icon: Icon(Icons.groups_outlined),
-            selectedIcon: Icon(Icons.groups, color: maroon), label: 'Grup'),
-        NavigationDestination(icon: Icon(Icons.history),
-            selectedIcon: Icon(Icons.history, color: maroon), label: 'Riwayat'),
-        NavigationDestination(icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: maroon), label: 'Profil'),
+        NavigationDestination(
+          icon: Icon(Icons.home_outlined),
+          selectedIcon: Icon(Icons.home, color: maroon),
+          label: 'Beranda',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.groups_outlined),
+          selectedIcon: Icon(Icons.groups, color: maroon),
+          label: 'Grup',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.history),
+          selectedIcon: Icon(Icons.history, color: maroon),
+          label: 'Riwayat',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_outline),
+          selectedIcon: Icon(Icons.person, color: maroon),
+          label: 'Profil',
+        ),
       ],
     ),
   );
