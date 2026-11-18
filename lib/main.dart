@@ -303,6 +303,8 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int selectedIndex = 0;
 
+StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
+
   final pages = const [
     DashboardPage(),
     GroupsPage(),
@@ -313,19 +315,38 @@ class _HomePageState extends State<HomePage> {
   late final StreamSubscription<String> tokenRefreshSubscription;
 
   @override
-  void initState() {
-    super.initState();
+void initState() {
+  super.initState();
 
-    registerDeviceToken();
+  registerDeviceToken();
 
-    tokenRefreshSubscription =
-        FirebaseMessaging.instance.onTokenRefresh.listen(
-      (token) {
-        saveDeviceToken(token);
-      },
+  tokenRefreshSubscription =
+      FirebaseMessaging.instance.onTokenRefresh.listen(
+    (token) {
+      saveDeviceToken(token);
+    },
+  );
+
+  _foregroundMessageSubscription =
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    if (!mounted) return;
+
+    final title = message.notification?.title ??
+        message.data['title'] ??
+        'Notifikasi PMR';
+
+    final body = message.notification?.body ??
+        message.data['body'] ??
+        'Ada informasi baru.';
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$title\n$body'),
+        duration: const Duration(seconds: 5),
+      ),
     );
-  }
-
+  });
+}
   Future<void> registerDeviceToken() async {
     try {
       final settings =
@@ -370,10 +391,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   @override
-  void dispose() {
-    tokenRefreshSubscription.cancel();
-    super.dispose();
-  }
+void dispose() {
+  tokenRefreshSubscription.cancel();
+  _foregroundMessageSubscription?.cancel();
+  super.dispose();
+}
 
   @override
   Widget build(BuildContext context) => Scaffold(
