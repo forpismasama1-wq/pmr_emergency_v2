@@ -46,7 +46,9 @@ Future<void> main() async {
   const InitializationSettings initializationSettings =
       InitializationSettings(android: androidSettings);
 
-  await localNotifications.initialize(initializationSettings);
+  await localNotifications.initialize(
+  settings: initializationSettings,
+);
 
   await localNotifications
       .resolvePlatformSpecificImplementation<
@@ -365,20 +367,20 @@ void initState() {
         'Ada informasi baru.';
 
     await localNotifications.show(
-      message.hashCode,
-      title,
-      body,
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'pmr_emergency_channel',
-          'PMR Emergency',
-          channelDescription: 'Notifikasi laporan SOS dan tanggapan PMR',
-          importance: Importance.max,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
-      ),
-    );
+  id: message.hashCode,
+  title: title,
+  body: body,
+  notificationDetails: const NotificationDetails(
+    android: AndroidNotificationDetails(
+      'pmr_emergency_channel',
+      'PMR Emergency',
+      channelDescription: 'Notifikasi laporan SOS dan tanggapan PMR',
+      importance: Importance.max,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    ),
+  ),
+);
 
     if (!mounted) return;
 
