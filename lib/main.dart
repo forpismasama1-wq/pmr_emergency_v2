@@ -1243,6 +1243,7 @@ class _GroupsPageState extends State<GroupsPage> {
 }
 
 
+
 // ===============================
 // DETAIL GRUP DAN ANGGOTA
 // ===============================
@@ -1295,7 +1296,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       });
     } catch (e) {
       if (!mounted) return;
-
       setState(() => loading = false);
       showMessage(context, 'Gagal memuat anggota: $e');
     }
@@ -1325,9 +1325,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       if (!mounted) return;
       showMessage(context, 'Gagal memperbarui kode: $e');
     } finally {
-      if (mounted) {
-        setState(() => refreshing = false);
-      }
+      if (mounted) setState(() => refreshing = false);
     }
   }
 
@@ -1344,9 +1342,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
           content: Text(message),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
+              onPressed: () => Navigator.pop(dialogContext, false),
               child: const Text('BATAL'),
             ),
             ElevatedButton(
@@ -1354,9 +1350,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 backgroundColor: maroon,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
+              onPressed: () => Navigator.pop(dialogContext, true),
               child: Text(confirmText),
             ),
           ],
@@ -1373,7 +1367,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     final confirmed = await confirmAction(
       title: 'Keluar dari grup?',
       message:
-          'Kamu akan dikeluarkan dari daftar anggota grup ini. '
+          'Kamu akan keluar dari grup ini. '
           'Riwayat laporan dan tanggapan tetap tersimpan.',
       confirmText: 'YA, KELUAR',
     );
@@ -1393,19 +1387,12 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       if (!mounted) return;
 
       showMessage(context, 'Kamu berhasil keluar dari grup.');
-
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-
-      showMessage(
-        context,
-        'Gagal keluar dari grup: ${e.toString()}',
-      );
+      showMessage(context, 'Gagal keluar dari grup: $e');
     } finally {
-      if (mounted) {
-        setState(() => processing = false);
-      }
+      if (mounted) setState(() => processing = false);
     }
   }
 
@@ -1415,10 +1402,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     final confirmed = await confirmAction(
       title: 'Arsipkan grup?',
       message:
-          'Grup ini tidak bisa digunakan untuk bergabung atau '
+          'Grup tidak bisa digunakan untuk bergabung atau '
           'mengirim laporan SOS baru. '
-          'Riwayat laporan dan tanggapan tetap disimpan. '
-          'Tindakan ini tidak dapat dibatalkan melalui aplikasi.',
+          'Riwayat laporan dan tanggapan tetap disimpan.',
       confirmText: 'ARSIPKAN',
     );
 
@@ -1437,19 +1423,120 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
       if (!mounted) return;
 
       showMessage(context, 'Grup berhasil diarsipkan.');
-
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
-
-      showMessage(
-        context,
-        'Gagal mengarsipkan grup: ${e.toString()}',
-      );
+      showMessage(context, 'Gagal mengarsipkan grup: $e');
     } finally {
+      if (mounted) setState(() => processing = false);
+    }
+  }
+
+  // ===============================
+  // HAPUS PERMANEN GRUP
+  // ===============================
+
+  Future<void> deleteGroup() async {
+    if (!isAdmin || processing) return;
+
+    final firstConfirm = await confirmAction(
+      title: 'Hapus grup permanen?',
+      message:
+          'Grup "${
+            widget.group['school_name'] ?? 'Grup Sekolah'
+          }" akan dihapus untuk semua anggota.\n\n'
+          'Seluruh laporan SOS, tanggapan, dan keanggotaan '
+          'grup ini juga akan terhapus permanen.\n\n'
+          'Profil akun pengguna tetap aman. '
+          'Tindakan ini tidak bisa dibatalkan.',
+      confirmText: 'LANJUTKAN',
+    );
+
+    if (!firstConfirm || !mounted) return;
+
+    final controller = TextEditingController();
+    final groupName =
+        widget.group['school_name']?.toString() ?? 'Grup Sekolah';
+
+    final secondConfirm = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Konfirmasi terakhir'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Ketik nama grup di bawah ini untuk '
+                'mengonfirmasi penghapusan:',
+              ),
+              const SizedBox(height: 12),
+              Text(
+                groupName,
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: 'Ketik nama grup',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('BATAL'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(
+                  dialogContext,
+                  controller.text.trim() == groupName,
+                );
+              },
+              child: const Text('HAPUS PERMANEN'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (secondConfirm != true || !mounted) {
       if (mounted) {
-        setState(() => processing = false);
+        showMessage(context, 'Konfirmasi nama grup tidak sesuai.');
       }
+      return;
+    }
+
+    setState(() => processing = true);
+
+    try {
+      await supabase.rpc(
+        'delete_school_group',
+        params: {
+          'p_school_id': widget.group['school_id'],
+        },
+      );
+
+      if (!mounted) return;
+
+      showMessage(context, 'Grup berhasil dihapus permanen.');
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+      showMessage(context, 'Gagal menghapus grup: $e');
+    } finally {
+      if (mounted) setState(() => processing = false);
     }
   }
 
@@ -1497,9 +1584,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     const Divider(height: 28),
                     const Text(
                       'KODE UNDANGAN',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     SelectableText(
@@ -1527,10 +1612,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     if (isAdmin) ...[
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
-                        onPressed:
-                            refreshing || processing
-                                ? null
-                                : refreshInviteCode,
+                        onPressed: refreshing || processing
+                            ? null
+                            : refreshInviteCode,
                         icon: const Icon(Icons.refresh),
                         label: const Text('GANTI KODE UNDANGAN'),
                       ),
@@ -1539,9 +1623,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1582,7 +1664,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                         final name =
                             member['full_name']?.toString() ??
                                 'Anggota PMR';
-
                         final role =
                             member['role']?.toString() ?? 'anggota';
 
@@ -1603,10 +1684,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 ),
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // TOMBOL KELOLA GRUP
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1621,36 +1699,39 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     OutlinedButton.icon(
                       onPressed: processing ? null : leaveGroup,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: maroon,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       icon: const Icon(Icons.logout),
                       label: const Text('KELUAR DARI GRUP'),
                     ),
-
                     if (isAdmin) ...[
                       const SizedBox(height: 10),
                       ElevatedButton.icon(
-                        onPressed:
-                            processing ? null : archiveGroup,
+                        onPressed: processing ? null : archiveGroup,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.red.shade800,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            vertical: 14,
-                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                         ),
                         icon: const Icon(Icons.archive_outlined),
                         label: const Text('ARSIPKAN GRUP'),
                       ),
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed: processing ? null : deleteGroup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade900,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        icon: const Icon(Icons.delete_forever),
+                        label: const Text('HAPUS PERMANEN'),
+                      ),
                     ],
-
                     if (processing) ...[
                       const SizedBox(height: 12),
                       const Center(
@@ -1667,7 +1748,6 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     );
   }
 }
-
 
 // ===============================
 // RIWAYAT LAPORAN SOS
