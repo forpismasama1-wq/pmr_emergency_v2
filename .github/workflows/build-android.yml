@@ -1,3 +1,4 @@
+
 name: Build PMR Emergency V2 APK
 
 on:
@@ -33,9 +34,12 @@ jobs:
           sed -i '/id("org.jetbrains.kotlin.android")/a\    id("com.google.gms.google-services") version "4.4.2" apply false' app/android/settings.gradle.kts
           sed -i '/id("com.android.application")/a\    id("com.google.gms.google-services")' app/android/app/build.gradle.kts
 
-      - name: Atur izin internet
+      - name: Atur izin Android
         run: |
           sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET"/>' app/android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>' app/android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>' app/android/app/src/main/AndroidManifest.xml
+          sed -i '/<application/i\    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>' app/android/app/src/main/AndroidManifest.xml
 
       - name: Tambahkan paket
         run: |
@@ -43,10 +47,16 @@ jobs:
           flutter pub add supabase_flutter
           flutter pub add firebase_core
           flutter pub add firebase_messaging
+          flutter pub add geolocator
 
       - name: Periksa Package ID
         run: |
           grep -R "applicationId" app/android/app/
+
+      - name: Periksa kode
+        run: |
+          cd app
+          flutter analyze
 
       - name: Bangun APK
         run: |
