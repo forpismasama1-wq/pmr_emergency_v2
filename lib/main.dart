@@ -1788,10 +1788,14 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 
   Future<void> loadReports() async {
-    setState(() => loading = true);
+    if (mounted) {
+      setState(() => loading = true);
+    }
 
     try {
-      final groups = await supabase.rpc('get_my_school_groups');
+      // Mengambil grup aktif dan grup yang diarsipkan.
+      final groups =
+          await supabase.rpc('get_my_history_school_groups');
 
       final groupList =
           List<Map<String, dynamic>>.from(groups ?? []);
@@ -1799,10 +1803,12 @@ class _HistoryPageState extends State<HistoryPage> {
       final schoolIds = groupList
           .map((group) => group['school_id'])
           .where((id) => id != null)
+          .toSet()
           .toList();
 
       if (schoolIds.isEmpty) {
         if (!mounted) return;
+
         setState(() {
           reports = [];
           loading = false;
@@ -1960,7 +1966,6 @@ class _HistoryPageState extends State<HistoryPage> {
     );
   }
 }
-
 
 // ===============================
 // DETAIL LAPORAN DAN TANGGAPAN
