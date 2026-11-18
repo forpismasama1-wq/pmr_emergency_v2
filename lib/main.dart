@@ -1242,6 +1242,7 @@ class _GroupsPageState extends State<GroupsPage> {
   }
 }
 
+
 // ===============================
 // DETAIL GRUP DAN ANGGOTA
 // ===============================
@@ -1264,6 +1265,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
   List<Map<String, dynamic>> members = [];
   bool loading = true;
   bool refreshing = false;
+  bool processing = false;
 
   @override
   void initState() {
@@ -1300,7 +1302,7 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
   }
 
   Future<void> refreshInviteCode() async {
-    if (refreshing) return;
+    if (refreshing || processing) return;
 
     setState(() => refreshing = true);
 
@@ -1325,6 +1327,128 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
     } finally {
       if (mounted) {
         setState(() => refreshing = false);
+      }
+    }
+  }
+
+  Future<bool> confirmAction({
+    required String title,
+    required String message,
+    required String confirmText,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Text(title),
+          content: Text(message),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext, false);
+              },
+              child: const Text('BATAL'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: maroon,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(dialogContext, true);
+              },
+              child: Text(confirmText),
+            ),
+          ],
+        );
+      },
+    );
+
+    return result == true;
+  }
+
+  Future<void> leaveGroup() async {
+    if (processing) return;
+
+    final confirmed = await confirmAction(
+      title: 'Keluar dari grup?',
+      message:
+          'Kamu akan dikeluarkan dari daftar anggota grup ini. '
+          'Riwayat laporan dan tanggapan tetap tersimpan.',
+      confirmText: 'YA, KELUAR',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => processing = true);
+
+    try {
+      await supabase.rpc(
+        'leave_school_group',
+        params: {
+          'p_school_id': widget.group['school_id'],
+        },
+      );
+
+      if (!mounted) return;
+
+      showMessage(context, 'Kamu berhasil keluar dari grup.');
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      showMessage(
+        context,
+        'Gagal keluar dari grup: ${e.toString()}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => processing = false);
+      }
+    }
+  }
+
+  Future<void> archiveGroup() async {
+    if (!isAdmin || processing) return;
+
+    final confirmed = await confirmAction(
+      title: 'Arsipkan grup?',
+      message:
+          'Grup ini tidak bisa digunakan untuk bergabung atau '
+          'mengirim laporan SOS baru. '
+          'Riwayat laporan dan tanggapan tetap disimpan. '
+          'Tindakan ini tidak dapat dibatalkan melalui aplikasi.',
+      confirmText: 'ARSIPKAN',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    setState(() => processing = true);
+
+    try {
+      await supabase.rpc(
+        'archive_school_group',
+        params: {
+          'p_school_id': widget.group['school_id'],
+        },
+      );
+
+      if (!mounted) return;
+
+      showMessage(context, 'Grup berhasil diarsipkan.');
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      if (!mounted) return;
+
+      showMessage(
+        context,
+        'Gagal mengarsipkan grup: ${e.toString()}',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => processing = false);
       }
     }
   }
@@ -1389,19 +1513,24 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                     ),
                     const SizedBox(height: 10),
                     ElevatedButton.icon(
-                      onPressed: () {
-                        showMessage(
-                          context,
-                          'Kode undangan: $inviteCode',
-                        );
-                      },
+                      onPressed: processing
+                          ? null
+                          : () {
+                              showMessage(
+                                context,
+                                'Kode undangan: $inviteCode',
+                              );
+                            },
                       icon: const Icon(Icons.info_outline),
                       label: const Text('LIHAT KODE'),
                     ),
                     if (isAdmin) ...[
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
-                        onPressed: refreshing ? null : refreshInviteCode,
+                        onPressed:
+                            refreshing || processing
+                                ? null
+                                : refreshInviteCode,
                         icon: const Icon(Icons.refresh),
                         label: const Text('GANTI KODE UNDANGAN'),
                       ),
@@ -1410,7 +1539,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                 ),
               ),
             ),
+
             const SizedBox(height: 16),
+
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -1429,7 +1560,9 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                           ),
                         ),
                         IconButton(
-                          onPressed: loadMembers,
+                          onPressed: loading || processing
+                              ? null
+                              : loadMembers,
                           icon: const Icon(Icons.refresh),
                         ),
                       ],
@@ -1466,6 +1599,64 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
                           subtitle: Text(role),
                         );
                       }),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // TOMBOL KELOLA GRUP
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'KELOLA GRUP',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 17,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    OutlinedButton.icon(
+                      onPressed: processing ? null : leaveGroup,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: maroon,
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
+                      ),
+                      icon: const Icon(Icons.logout),
+                      label: const Text('KELUAR DARI GRUP'),
+                    ),
+
+                    if (isAdmin) ...[
+                      const SizedBox(height: 10),
+                      ElevatedButton.icon(
+                        onPressed:
+                            processing ? null : archiveGroup,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red.shade800,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 14,
+                          ),
+                        ),
+                        icon: const Icon(Icons.archive_outlined),
+                        label: const Text('ARSIPKAN GRUP'),
+                      ),
+                    ],
+
+                    if (processing) ...[
+                      const SizedBox(height: 12),
+                      const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    ],
                   ],
                 ),
               ),
