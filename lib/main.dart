@@ -2524,7 +2524,7 @@ Future<void> sendPmrNotification({
   required Map<String, dynamic> body,
 }) async {
   await supabase.functions.invoke(
-    'smooth-service',
+  'send-pmr-notification',
     body: {
       'event': event,
       ...body,
