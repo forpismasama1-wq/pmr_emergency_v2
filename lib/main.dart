@@ -1989,6 +1989,7 @@ class _HistoryPageState extends State<HistoryPage> {
   }
 }
 
+
 // ===============================
 // DETAIL LAPORAN DAN TANGGAPAN
 // ===============================
@@ -2029,6 +2030,25 @@ class _ReportDetailPageState
     } catch (_) {
       return value.toString();
     }
+  }
+
+  String displayName(dynamic value) {
+    if (value == null || value.toString().isEmpty) {
+      return 'Anggota PMR';
+    }
+
+    final text = value.toString();
+
+    // Hindari menampilkan UUID sebagai nama.
+    final uuidPattern = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
+
+    if (uuidPattern.hasMatch(text)) {
+      return 'Anggota PMR';
+    }
+
+    return text;
   }
 
   @override
@@ -2109,14 +2129,14 @@ class _ReportDetailPageState
 
         showMessage(
           context,
-          'Tanggapan berhasil dikirim dan notifikasi diproses.',
+          'Tanggapan berhasil dikirim.',
         );
       } catch (notificationError) {
         if (!mounted) return;
 
         showMessage(
           context,
-          'Tanggapan tersimpan, tetapi notifikasi gagal dikirim.',
+          'Tanggapan tersimpan, tetapi notifikasi gagal diproses.',
         );
       }
     } catch (e) {
@@ -2139,8 +2159,10 @@ class _ReportDetailPageState
         widget.report['message']?.toString() ??
             'Laporan darurat';
 
-    final sender =
-        widget.report['sender_id']?.toString() ?? '-';
+    final sender = displayName(
+      widget.report['sender_name'] ??
+          widget.report['full_name'],
+    );
 
     final date = formatDate(widget.report['created_at']);
 
@@ -2208,12 +2230,22 @@ class _ReportDetailPageState
 
                   const SizedBox(height: 16),
 
-                  const Text(
-                    'TANGGAPAN ANGGOTA',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'TANGGAPAN ANGGOTA',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: loading ? null : loadResponses,
+                        icon: const Icon(Icons.refresh),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 8),
@@ -2234,6 +2266,11 @@ class _ReportDetailPageState
                     )
                   else
                     ...responses.map((response) {
+                      final responseName = displayName(
+                        response['full_name'] ??
+                            response['sender_name'],
+                      );
+
                       return Card(
                         margin: const EdgeInsets.only(
                           bottom: 10,
@@ -2251,7 +2288,7 @@ class _ReportDetailPageState
                                 '-',
                           ),
                           subtitle: Text(
-                            'Pengirim: ${response['user_id'] ?? '-'}\n'
+                            'Pengirim: $responseName\n'
                             '${formatDate(response['created_at'])}',
                           ),
                         ),
