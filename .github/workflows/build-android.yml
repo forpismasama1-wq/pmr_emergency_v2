@@ -48,6 +48,7 @@ jobs:
           flutter pub add supabase_flutter
           flutter pub add firebase_core
           flutter pub add firebase_messaging
+          flutter pub add flutter_local_notifications
           flutter pub add geolocator
 
       - name: Periksa Package ID
