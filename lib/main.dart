@@ -1668,12 +1668,102 @@ class _GroupDetailPageState extends State<GroupDetailPage> {
   }
 }
 
+
 // ===============================
-// RIWAYAT LAPORAN
+// RIWAYAT LAPORAN SOS
 // ===============================
 
-class HistoryPage extends StatelessWidget {
+class HistoryPage extends StatefulWidget {
   const HistoryPage({super.key});
+
+  @override
+  State<HistoryPage> createState() => _HistoryPageState();
+}
+
+class _HistoryPageState extends State<HistoryPage> {
+  final supabase = Supabase.instance.client;
+
+  List<Map<String, dynamic>> reports = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    loadReports();
+  }
+
+  String formatDate(dynamic value) {
+    if (value == null) return '-';
+
+    try {
+      final date = DateTime.parse(value.toString()).toLocal();
+      return '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.year} '
+          '${date.hour.toString().padLeft(2, '0')}:'
+          '${date.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  Future<void> loadReports() async {
+    setState(() => loading = true);
+
+    try {
+      final groups = await supabase.rpc('get_my_school_groups');
+
+      final groupList =
+          List<Map<String, dynamic>>.from(groups ?? []);
+
+      final schoolIds = groupList
+          .map((group) => group['school_id'])
+          .where((id) => id != null)
+          .toList();
+
+      if (schoolIds.isEmpty) {
+        if (!mounted) return;
+        setState(() {
+          reports = [];
+          loading = false;
+        });
+        return;
+      }
+
+      final result = await supabase
+          .from('emergency_reports')
+          .select()
+          .inFilter('school_id', schoolIds)
+          .order('created_at', ascending: false);
+
+      if (!mounted) return;
+
+      setState(() {
+        reports = List<Map<String, dynamic>>.from(result);
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => loading = false);
+      showMessage(context, 'Gagal memuat riwayat: $e');
+    }
+  }
+
+  Future<void> openReport(
+    Map<String, dynamic> report,
+  ) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ReportDetailPage(report: report),
+      ),
+    );
+
+    if (mounted) {
+      loadReports();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1682,38 +1772,430 @@ class HistoryPage extends StatelessWidget {
         title: const Text('Riwayat Laporan'),
         backgroundColor: maroon,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: loading ? null : loadReports,
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
       ),
       body: BatikBackground(
-        child: const Center(
-          child: Card(
-            margin: EdgeInsets.all(20),
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.history,
-                    size: 55,
-                    color: maroon,
+        child: loading
+            ? const Center(
+                child: CircularProgressIndicator(),
+              )
+            : reports.isEmpty
+                ? const Center(
+                    child: Card(
+                      margin: EdgeInsets.all(20),
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.history,
+                              size: 55,
+                              color: maroon,
+                            ),
+                            SizedBox(height: 12),
+                            Text(
+                              'Belum Ada Laporan',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Laporan SOS dari grup sekolahmu akan muncul di sini.',
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: loadReports,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: reports.length,
+                      itemBuilder: (context, index) {
+                        final report = reports[index];
+
+                        final message =
+                            report['message']?.toString() ??
+                                'Laporan darurat';
+
+                        final sender =
+                            report['sender_id']?.toString() ??
+                                '-';
+
+                        final date =
+                            formatDate(report['created_at']);
+
+                        return Card(
+                          margin: const EdgeInsets.only(
+                            bottom: 12,
+                          ),
+                          child: ListTile(
+                            contentPadding:
+                                const EdgeInsets.all(14),
+                            leading: const CircleAvatar(
+                              backgroundColor: maroon,
+                              child: Icon(
+                                Icons.warning_amber,
+                                color: Colors.white,
+                              ),
+                            ),
+                            title: Text(
+                              message,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            subtitle: Padding(
+                              padding:
+                                  const EdgeInsets.only(top: 8),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text('Pengirim: $sender'),
+                                  Text('Waktu: $date'),
+                                ],
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.chevron_right,
+                            ),
+                            onTap: () => openReport(report),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  SizedBox(height: 12),
-                  Text(
-                    'Riwayat Laporan',
+      ),
+    );
+  }
+}
+
+
+// ===============================
+// DETAIL LAPORAN DAN TANGGAPAN
+// ===============================
+
+class ReportDetailPage extends StatefulWidget {
+  final Map<String, dynamic> report;
+
+  const ReportDetailPage({
+    super.key,
+    required this.report,
+  });
+
+  @override
+  State<ReportDetailPage> createState() =>
+      _ReportDetailPageState();
+}
+
+class _ReportDetailPageState
+    extends State<ReportDetailPage> {
+  final supabase = Supabase.instance.client;
+  final responseController = TextEditingController();
+
+  List<Map<String, dynamic>> responses = [];
+
+  bool loading = true;
+  bool sending = false;
+
+  String formatDate(dynamic value) {
+    if (value == null) return '-';
+
+    try {
+      final date = DateTime.parse(value.toString()).toLocal();
+      return '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.year} '
+          '${date.hour.toString().padLeft(2, '0')}:'
+          '${date.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return value.toString();
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    loadResponses();
+  }
+
+  @override
+  void dispose() {
+    responseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> loadResponses() async {
+    try {
+      final result = await supabase
+          .from('emergency_responses')
+          .select()
+          .eq('report_id', widget.report['id'])
+          .order('created_at', ascending: true);
+
+      if (!mounted) return;
+
+      setState(() {
+        responses =
+            List<Map<String, dynamic>>.from(result);
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => loading = false);
+      showMessage(context, 'Gagal memuat tanggapan: $e');
+    }
+  }
+
+  Future<void> sendResponse() async {
+    final message = responseController.text.trim();
+
+    if (message.isEmpty || sending) return;
+
+    final user = supabase.auth.currentUser;
+
+    if (user == null) {
+      showMessage(context, 'Silakan login terlebih dahulu.');
+      return;
+    }
+
+    setState(() => sending = true);
+
+    try {
+      final result = await supabase
+          .from('emergency_responses')
+          .insert({
+            'report_id': widget.report['id'],
+            'user_id': user.id,
+            'response': message,
+          })
+          .select()
+          .single();
+
+      responseController.clear();
+
+      if (!mounted) return;
+
+      await loadResponses();
+
+      try {
+        await sendPmrNotification(
+          event: 'response_created',
+          body: {
+            'response_id': result['id'],
+          },
+        );
+
+        if (!mounted) return;
+
+        showMessage(
+          context,
+          'Tanggapan berhasil dikirim dan notifikasi diproses.',
+        );
+      } catch (notificationError) {
+        if (!mounted) return;
+
+        showMessage(
+          context,
+          'Tanggapan tersimpan, tetapi notifikasi gagal dikirim.',
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      showMessage(
+        context,
+        'Gagal mengirim tanggapan: $e',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => sending = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final message =
+        widget.report['message']?.toString() ??
+            'Laporan darurat';
+
+    final sender =
+        widget.report['sender_id']?.toString() ?? '-';
+
+    final date = formatDate(widget.report['created_at']);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Detail Laporan'),
+        backgroundColor: maroon,
+        foregroundColor: Colors.white,
+      ),
+      body: BatikBackground(
+        child: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber,
+                                color: Colors.red,
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'LAPORAN SOS',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(),
+                          Text(
+                            message,
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Text('Pengirim: $sender'),
+                          Text('Waktu: $date'),
+                          if (widget.report['latitude'] != null &&
+                              widget.report['longitude'] != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Latitude: ${widget.report['latitude']}',
+                            ),
+                            Text(
+                              'Longitude: ${widget.report['longitude']}',
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  const Text(
+                    'TANGGAPAN ANGGOTA',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 17,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    'Fitur riwayat laporan akan dihubungkan dengan data laporan darurat Supabase pada tahap berikutnya.',
-                    textAlign: TextAlign.center,
-                  ),
+
+                  const SizedBox(height: 8),
+
+                  if (loading)
+                    const Center(
+                      child: CircularProgressIndicator(),
+                    )
+                  else if (responses.isEmpty)
+                    const Card(
+                      child: Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Text(
+                          'Belum ada tanggapan untuk laporan ini.',
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    )
+                  else
+                    ...responses.map((response) {
+                      return Card(
+                        margin: const EdgeInsets.only(
+                          bottom: 10,
+                        ),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: maroon,
+                            child: Icon(
+                              Icons.person,
+                              color: Colors.white,
+                            ),
+                          ),
+                          title: Text(
+                            response['response']?.toString() ??
+                                '-',
+                          ),
+                          subtitle: Text(
+                            'Pengirim: ${response['user_id'] ?? '-'}\n'
+                            '${formatDate(response['created_at'])}',
+                          ),
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
-          ),
+
+            SafeArea(
+              top: false,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                color: Theme.of(context).scaffoldBackgroundColor,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: responseController,
+                        minLines: 1,
+                        maxLines: 3,
+                        enabled: !sending,
+                        decoration: const InputDecoration(
+                          hintText: 'Tulis tanggapan...',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: sending ? null : sendResponse,
+                      style: IconButton.styleFrom(
+                        backgroundColor: maroon,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: sending
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.send),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
