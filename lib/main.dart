@@ -4,7 +4,19 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:geolocator/geolocator.dart';
+
+final FlutterLocalNotificationsPlugin localNotifications =
+    FlutterLocalNotificationsPlugin();
+
+const AndroidNotificationChannel pmrNotificationChannel =
+    AndroidNotificationChannel(
+  'pmr_emergency_channel',
+  'PMR Emergency',
+  description: 'Notifikasi laporan SOS dan tanggapan PMR',
+  importance: Importance.max,
+);
 
 const supabaseUrl = 'https://ohrjcryavbljkpjqcbxc.supabase.co';
 const supabaseAnonKey = 'sb_publishable_06FNKGYFiebdBkoVySmrPQ_mQ-CyMll';
@@ -27,6 +39,19 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp();
+
+  const AndroidInitializationSettings androidSettings =
+      AndroidInitializationSettings('@mipmap/ic_launcher');
+
+  const InitializationSettings initializationSettings =
+      InitializationSettings(android: androidSettings);
+
+  await localNotifications.initialize(initializationSettings);
+
+  await localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(pmrNotificationChannel);
 
   FirebaseMessaging.onBackgroundMessage(
     firebaseMessagingBackgroundHandler,
@@ -328,7 +353,7 @@ void initState() {
   );
 
   _foregroundMessageSubscription =
-      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
     if (!mounted) return;
 
     final title = message.notification?.title ??
@@ -338,6 +363,24 @@ void initState() {
     final body = message.notification?.body ??
         message.data['body'] ??
         'Ada informasi baru.';
+
+    await localNotifications.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'pmr_emergency_channel',
+          'PMR Emergency',
+          channelDescription: 'Notifikasi laporan SOS dan tanggapan PMR',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+    );
+
+    if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
