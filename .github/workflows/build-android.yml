@@ -1,4 +1,3 @@
-
 name: Build PMR Emergency V2 APK
 
 on:
@@ -25,18 +24,28 @@ jobs:
           flutter create --platforms=android --project-name pmr_emergency_v2 app
           cp lib/main.dart app/lib/main.dart
 
+      - name: Pasang konfigurasi Firebase
+        run: |
+          cp google-services.json app/android/app/google-services.json
+
+      - name: Aktifkan Google Services
+        run: |
+          sed -i '/id("org.jetbrains.kotlin.android")/a\    id("com.google.gms.google-services") version "4.4.2" apply false' app/android/settings.gradle.kts
+          sed -i '/id("com.android.application")/a\    id("com.google.gms.google-services")' app/android/app/build.gradle.kts
+
       - name: Atur izin internet
         run: |
           sed -i '/<application/i\    <uses-permission android:name="android.permission.INTERNET"/>' app/android/app/src/main/AndroidManifest.xml
 
-      - name: Tambahkan Supabase
+      - name: Tambahkan paket
         run: |
           cd app
           flutter pub add supabase_flutter
+          flutter pub add firebase_core
+          flutter pub add firebase_messaging
 
-      - name: Tampilkan Package ID
+      - name: Periksa Package ID
         run: |
-          echo "=== PACKAGE ID ANDROID ==="
           grep -R "applicationId" app/android/app/
 
       - name: Bangun APK
